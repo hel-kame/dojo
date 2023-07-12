@@ -398,10 +398,10 @@ mod world {
         ) {
             assert_can_write(@self, component);
 
-            let table_id = query.table(component);
+            let table_id = component;
             let keys = query.keys();
             let component_class_hash = self.components.read(component);
-            database::set(component_class_hash, table_id, query, offset, value);
+            database::set(component_class_hash, component, query, offset, value);
 
             EventEmitter::emit(ref self, StoreSetRecord { table_id, keys, offset, value });
         }
@@ -439,13 +439,7 @@ mod world {
             self: @ContractState, component: felt252, query: Query, offset: u8, length: usize
         ) -> Span<felt252> {
             let class_hash = self.components.read(component);
-            let table = query.table(component);
-            match database::get(class_hash, table, query, offset, length) {
-                Option::Some(res) => res,
-                Option::None(_) => {
-                    ArrayTrait::new().span()
-                }
-            }
+            database::get(class_hash, component, query, offset, length)
         }
 
         /// Returns entity IDs and entities that contain the component state.
