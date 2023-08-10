@@ -272,8 +272,8 @@ mod world {
         /// # Arguments
         ///
         /// * `class_hash` - The class hash of the system to be registered.
-        fn register_system(ref self: ContractState, class_hash: ClassHash) {
-            let name = ISystemLibraryDispatcher { class_hash: class_hash }.name();
+        fn register_system(ref self: ContractState, system: ISystemLibraryDispatcher) {
+            let name = self.executor_dispatcher.read().name();
 
             // If system is already registered, validate permission to update.
             if self.systems.read(name).is_non_zero() {
@@ -282,8 +282,8 @@ mod world {
                 );
             }
 
-            self.systems.write(name, class_hash);
-            EventEmitter::emit(ref self, SystemRegistered { name, class_hash });
+            self.systems.write(name, system);
+            EventEmitter::emit(ref self, SystemRegistered { name, class_hash: system.class_hash });
         }
 
         /// Gets the class hash of a registered system.

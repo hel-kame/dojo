@@ -13,10 +13,9 @@ mod executor {
     use box::BoxTrait;
     use traits::{TryInto, Into};
     use option::OptionTrait;
-    use starknet::{get_caller_address, get_tx_info};
+    use starknet::{get_caller_address, get_tx_info, SyscallResultTrait};
 
     use dojo::world::IWorldDispatcher;
-    use dojo::traits::{ISystemLibraryDispatcher, ISystemDispatcherTrait};
     use dojo::world::Context;
 
     use super::IExecutor;
@@ -42,10 +41,6 @@ mod executor {
         fn execute(
             self: @ContractState, ctx: Context, mut calldata: Span<felt252>
         ) -> Span<felt252> {
-            // Get the world address and instantiate the world dispatcher.
-            let world_address = get_caller_address();
-            let world = IWorldDispatcher { contract_address: world_address };
-
             // Serialize the context
             let mut calldata_arr = ArrayTrait::new();
             ctx.serialize(ref calldata_arr);
@@ -69,6 +64,16 @@ mod executor {
                 .unwrap_syscall();
 
             res
+        }
+
+        fn call(
+            self: @ContractState,
+            class_hash: ClassHash,
+            entrypoint: felt252,
+            calldata: Span<felt252>
+        ) -> Span<felt252> {
+            starknet::syscalls::library_call_syscall(class_hash, entrypoint, calldata, )
+                .unwrap_syscall()
         }
     }
 }
