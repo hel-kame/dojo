@@ -7,22 +7,14 @@ use cairo_lang_starknet::inline_macros::selector::SelectorMacro;
 use cairo_lang_starknet::plugin::StarkNetPlugin;
 use cairo_lang_test_runner::plugin::TestPlugin;
 use cairo_lang_utils::logging::init_logging;
-use clap::Parser;
 use dojo_lang::inline_macros::emit::EmitMacro;
 use dojo_lang::inline_macros::get::GetMacro;
 use dojo_lang::inline_macros::set::SetMacro;
 use dojo_lang::plugin::BuiltinDojoPlugin;
 use tower_lsp::{LspService, Server};
 
-/// Dojo Language Server
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {}
-
 #[tokio::main]
 async fn main() {
-    let _args = Args::parse();
-
     init_logging(log::LevelFilter::Warn);
 
     #[cfg(feature = "runtime-agnostic")]
@@ -34,9 +26,9 @@ async fn main() {
 
     let db = RootDatabase::builder()
         .with_cfg(CfgSet::from_iter([Cfg::name("test")]))
-        .with_macro_plugin(Arc::new(TestPlugin::default()))
         .with_macro_plugin(Arc::new(BuiltinDojoPlugin))
         .with_macro_plugin(Arc::new(StarkNetPlugin::default()))
+        .with_macro_plugin(Arc::new(TestPlugin::default()))
         .with_inline_macro_plugin(EmitMacro::NAME, Arc::new(EmitMacro))
         .with_inline_macro_plugin(GetMacro::NAME, Arc::new(GetMacro))
         .with_inline_macro_plugin(SetMacro::NAME, Arc::new(SetMacro))
