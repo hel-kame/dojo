@@ -5310,6 +5310,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "reth-libmdbx",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
