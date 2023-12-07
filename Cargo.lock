@@ -5271,6 +5271,7 @@ dependencies = [
  "flate2",
  "futures",
  "hex",
+ "katana-db",
  "katana-executor",
  "katana-primitives",
  "katana-provider",

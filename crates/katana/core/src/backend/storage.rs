@@ -6,7 +6,7 @@ use katana_primitives::block::{
 use katana_primitives::state::StateUpdatesWithDeclaredClasses;
 use katana_primitives::FieldElement;
 use katana_provider::traits::block::{BlockProvider, BlockWriter};
-use katana_provider::traits::contract::{ContractClassWriter, ContractInfoProvider};
+use katana_provider::traits::contract::ContractClassWriter;
 use katana_provider::traits::state::{StateFactoryProvider, StateRootProvider, StateWriter};
 use katana_provider::traits::state_update::StateUpdateProvider;
 use katana_provider::traits::transaction::{
@@ -26,7 +26,6 @@ pub trait Database:
     + ReceiptProvider
     + StateUpdateProvider
     + StateRootProvider
-    + ContractInfoProvider
     + StateWriter
     + ContractClassWriter
     + StateFactoryProvider
@@ -44,7 +43,6 @@ impl<T> Database for T where
         + TransactionsProviderExt
         + ReceiptProvider
         + StateUpdateProvider
-        + ContractInfoProvider
         + StateRootProvider
         + StateWriter
         + ContractClassWriter
