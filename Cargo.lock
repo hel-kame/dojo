@@ -5300,6 +5300,7 @@ dependencies = [
  "reth-libmdbx",
  "serde",
  "serde_json",
+ "starknet",
  "tempfile",
  "thiserror",
 ]
