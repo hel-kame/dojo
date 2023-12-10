@@ -37,7 +37,7 @@ impl DbEnv {
     /// Opens the database at the specified path with the given `EnvKind`.
     ///
     /// It does not create the tables, for that call [`DbEnv::create_tables`].
-    pub fn open(path: &Path, kind: DbEnvKind) -> Result<DbEnv, DatabaseError> {
+    pub fn open(path: impl AsRef<Path>, kind: DbEnvKind) -> Result<DbEnv, DatabaseError> {
         let mode = match kind {
             DbEnvKind::RO => Mode::ReadOnly,
             DbEnvKind::RW => Mode::ReadWrite { sync_mode: SyncMode::Durable },
@@ -65,7 +65,7 @@ impl DbEnv {
             })
             .set_max_readers(DEFAULT_MAX_READERS);
 
-        Ok(DbEnv(builder.open(path).map_err(DatabaseError::OpenEnv)?))
+        Ok(DbEnv(builder.open(path.as_ref()).map_err(DatabaseError::OpenEnv)?))
     }
 
     /// Creates all the defined tables in [`Tables`], if necessary.
@@ -96,8 +96,8 @@ impl DbEnv {
         Ok(Tx::new(self.0.begin_rw_txn().map_err(DatabaseError::CreateRWTx)?))
     }
 
-    /// Takes a function and passes a write-read transaction into it, making sure it's committed in
-    /// the end of the execution.
+    /// Takes a function and passes a read-write transaction into it, making sure it's always
+    /// committed in the end of the execution.
     pub fn update<T, F>(&self, f: F) -> Result<T, DatabaseError>
     where
         F: FnOnce(&Tx<RW>) -> T,
@@ -252,15 +252,15 @@ mod tests {
 
         let account = GenericContractInfo::default();
         cursor.upsert(key, account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.set(key), Ok(Some((key, account))));
 
         let account = GenericContractInfo { nonce: 1u8.into(), ..Default::default() };
         cursor.upsert(key, account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.set(key), Ok(Some((key, account))));
 
         let account = GenericContractInfo { nonce: 1u8.into(), ..Default::default() };
         cursor.upsert(key, account).expect(ERROR_UPSERT);
-        assert_eq!(cursor.seek_exact(key), Ok(Some((key, account))));
+        assert_eq!(cursor.set(key), Ok(Some((key, account))));
 
         let mut dup_cursor = tx.cursor::<ContractStorage>().unwrap();
         let subkey = felt!("0x9");
@@ -276,9 +276,6 @@ mod tests {
         assert_eq!(dup_cursor.seek_by_key_subkey(key, subkey), Ok(Some(entry1)));
         assert_eq!(dup_cursor.next_dup_val(), Ok(Some(entry2)));
     }
-
-    #[test]
-    fn db_cursor_dup_upsert() {}
 
     #[test]
     fn db_cursor_walk() {

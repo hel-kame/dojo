@@ -10,6 +10,7 @@ use katana_primitives::state::StateUpdatesWithDeclaredClasses;
 use katana_primitives::transaction::TxWithHash;
 use katana_primitives::FieldElement;
 use katana_provider::providers::fork::ForkedProvider;
+use katana_provider::providers::in_memory::InMemoryProvider;
 use katana_provider::traits::block::{BlockHashProvider, BlockWriter};
 use katana_provider::traits::state::{StateFactoryProvider, StateProvider};
 use parking_lot::RwLock;

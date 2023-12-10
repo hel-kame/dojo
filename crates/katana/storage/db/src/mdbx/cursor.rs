@@ -1,7 +1,6 @@
 //! Cursor wrapper for libmdbx-sys.
 
 use std::borrow::Cow;
-use std::fmt;
 use std::marker::PhantomData;
 
 use libmdbx::{self, TransactionKind, WriteFlags, RW};
@@ -11,11 +10,18 @@ use crate::error::DatabaseError;
 use crate::tables::{DupSort, Table};
 use crate::utils::{decode_one, decode_value, decoder, KeyValue};
 
+/// Takes `(key, value)` from the database and decodes it appropriately.
+macro_rules! decode {
+    ($v:expr) => {
+        $v.map_err($crate::error::DatabaseError::Read)?.map($crate::utils::decoder::<T>).transpose()
+    };
+}
+
 /// Cursor for navigating the items within a database.
 #[derive(Debug)]
 pub struct Cursor<K: TransactionKind, T: Table> {
     /// Inner `libmdbx` cursor.
-    pub(crate) inner: libmdbx::Cursor<K>,
+    inner: libmdbx::Cursor<K>,
     /// Phantom data to enforce encoding/decoding.
     _dbi: PhantomData<T>,
 }
@@ -26,54 +32,53 @@ impl<K: TransactionKind, T: Table> Cursor<K, T> {
     }
 }
 
-/// Takes `(key, value)` from the database and decodes it appropriately.
-macro_rules! decode {
-    ($v:expr) => {
-        $v.map_err($crate::error::DatabaseError::Read)?.map($crate::utils::decoder::<T>).transpose()
-    };
-}
-
 impl<K: TransactionKind, T: Table> Cursor<K, T> {
-    /// Positions the cursor at the first entry in the table, returning the value.
+    /// Retrieves the first key/value pair, positioning the cursor at the first key/value pair in
+    /// the table.
     pub fn first(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
         decode!(libmdbx::Cursor::first(&mut self.inner))
     }
 
-    pub fn seek_exact(
-        &mut self,
-        key: <T as Table>::Key,
-    ) -> Result<Option<KeyValue<T>>, DatabaseError> {
-        decode!(libmdbx::Cursor::set_key(&mut self.inner, key.encode().as_ref()))
+    /// Retrieves key/value pair at current cursor position.
+    pub fn current(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
+        decode!(libmdbx::Cursor::get_current(&mut self.inner))
     }
 
-    pub fn seek(&mut self, key: <T as Table>::Key) -> Result<Option<KeyValue<T>>, DatabaseError> {
-        decode!(libmdbx::Cursor::set_range(&mut self.inner, key.encode().as_ref()))
-    }
-
-    /// Position the cursor at the next KV pair, returning the value.
+    /// Retrieves the next key/value pair, positioning the cursor at the next key/value pair in
+    /// the table.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
         decode!(libmdbx::Cursor::next(&mut self.inner))
     }
 
-    /// Position the cursor at the previous KV pair, returning the value.
+    /// Retrieves the previous key/value pair, positioning the cursor at the previous key/value pair
+    /// in the table.
     pub fn prev(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
         decode!(libmdbx::Cursor::prev(&mut self.inner))
     }
 
+    /// Retrieves the last key/value pair, positioning the cursor at the last key/value pair in
+    /// the table.
     pub fn last(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
         decode!(libmdbx::Cursor::last(&mut self.inner))
     }
 
-    pub fn current(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
-        decode!(libmdbx::Cursor::get_current(&mut self.inner))
+    /// Set the cursor to the specified key, returning and positioning the cursor at the item if
+    /// found.
+    pub fn set(&mut self, key: <T as Table>::Key) -> Result<Option<KeyValue<T>>, DatabaseError> {
+        decode!(libmdbx::Cursor::set_key(&mut self.inner, key.encode().as_ref()))
     }
 
-    /// Returns the next `(key, value)` pair skipping the duplicates.
-    pub fn next_no_dup(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
-        decode!(libmdbx::Cursor::next_nodup(&mut self.inner))
+    /// Search for a `key` in a table, returning and positioning the cursor at the first item whose
+    /// key is greater than or equal to `key`.
+    pub fn seek(&mut self, key: <T as Table>::Key) -> Result<Option<KeyValue<T>>, DatabaseError> {
+        decode!(libmdbx::Cursor::set_range(&mut self.inner, key.encode().as_ref()))
     }
 
+    /// Creates a walker to iterate over the table items.
+    ///
+    /// If `start_key` is `None`, the walker will start at the first item of the table. Otherwise,
+    /// it will start at the first item whose key is greater than or equal to `start_key`.
     pub fn walk(&mut self, start_key: Option<T::Key>) -> Result<Walker<'_, K, T>, DatabaseError> {
         let start = if let Some(start_key) = start_key {
             self.inner
@@ -88,19 +93,15 @@ impl<K: TransactionKind, T: Table> Cursor<K, T> {
     }
 }
 
-impl<K, T> Cursor<K, T>
-where
-    K: TransactionKind,
-    T: DupSort,
-{
-    /// Position at next data item of current key, returning the next `(key, value)` pair of a
-    /// DUPSORT table.
+impl<K: TransactionKind, T: DupSort> Cursor<K, T> {
+    /// Positions the cursor at next data item of current key, returning the next `key-value`
+    /// pair of a DUPSORT table.
     pub fn next_dup(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
         decode!(libmdbx::Cursor::next_dup(&mut self.inner))
     }
 
-    /// Positions the cursor at next data item of current key, returning the next `value` of a
-    /// duplicate `key`.
+    /// Similar to [`Self::next_dup()`], but instead of returning a `key-value` pair, it returns
+    /// only the `value`.
     pub fn next_dup_val(&mut self) -> Result<Option<<T as Table>::Value>, DatabaseError> {
         libmdbx::Cursor::next_dup(&mut self.inner)
             .map_err(DatabaseError::Read)?
@@ -108,7 +109,13 @@ where
             .transpose()
     }
 
-    /// Position at given key and at first data greater than or equal to specified data,
+    /// Returns the next key/value pair skipping the duplicates.
+    pub fn next_no_dup(&mut self) -> Result<Option<KeyValue<T>>, DatabaseError> {
+        decode!(libmdbx::Cursor::next_nodup(&mut self.inner))
+    }
+
+    /// Search for a `key` and `subkey` pair in a DUPSORT table. Positioning the cursor at the first
+    /// item whose `subkey` is greater than or equal to the specified `subkey`.
     pub fn seek_by_key_subkey(
         &mut self,
         key: <T as Table>::Key,
@@ -130,11 +137,11 @@ where
     /// - None, Some(subkey): like first case, but in the first key
     /// - None, None: first item in the table
     /// of a DUPSORT table.
-    pub fn walk_dup(
-        &mut self,
+    pub fn walk_dup<'c>(
+        &'c mut self,
         key: Option<T::Key>,
         subkey: Option<T::SubKey>,
-    ) -> Result<DupWalker<'_, K, T>, DatabaseError> {
+    ) -> Result<DupWalker<'c, K, T>, DatabaseError> {
         let start = match (key, subkey) {
             (Some(key), Some(subkey)) => {
                 // encode key and decode it after.
@@ -168,7 +175,7 @@ where
             (None, None) => self.first().transpose(),
         };
 
-        Ok(DupWalker::<'_, K, T> { cursor: self, start })
+        Ok(DupWalker::new(self, start))
     }
 }
 
@@ -176,10 +183,10 @@ impl<T: Table> Cursor<RW, T> {
     /// Database operation that will update an existing row if a specified value already
     /// exists in a table, and insert a new row if the specified value doesn't already exist
     ///
-    /// For a DUPSORT table, `upsert` will not actually update-or-insert. If the key already exists,
-    /// it will append the value to the subkey, even if the subkeys are the same. So if you want
-    /// to properly upsert, you'll need to `seek_exact` & `delete_current` if the key+subkey was
-    /// found, before calling `upsert`.
+    /// For a `DUPSORT` table, `upsert` will not actually update-or-insert. If the key already
+    /// exists, it will append the value to the subkey, even if the subkeys are the same. So if
+    /// you want to properly upsert, you'll need to `seek_exact` & `delete_current` if the
+    /// key+subkey was found, before calling `upsert`.
     pub fn upsert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let key = Encode::encode(key);
         let value = Compress::compress(value);
@@ -192,6 +199,8 @@ impl<T: Table> Cursor<RW, T> {
             })
     }
 
+    /// Puts a key/value pair into the database. The cursor will be positioned at the new data item,
+    /// or on failure, usually near it.
     pub fn insert(&mut self, key: T::Key, value: T::Value) -> Result<(), DatabaseError> {
         let key = Encode::encode(key);
         let value = Compress::compress(value);
@@ -223,12 +232,17 @@ impl<T: Table> Cursor<RW, T> {
             })
     }
 
+    /// Deletes the current key/value pair.
     pub fn delete_current(&mut self) -> Result<(), DatabaseError> {
         libmdbx::Cursor::del(&mut self.inner, WriteFlags::CURRENT).map_err(DatabaseError::Delete)
     }
 }
 
 impl<T: DupSort> Cursor<RW, T> {
+    /// Deletes all values for the current key.
+    ///
+    /// This will delete all values for the current duplicate key of a `DUPSORT` table, including
+    /// the current item.
     pub fn delete_current_duplicates(&mut self) -> Result<(), DatabaseError> {
         libmdbx::Cursor::del(&mut self.inner, WriteFlags::NO_DUP_DATA)
             .map_err(DatabaseError::Delete)
@@ -250,29 +264,16 @@ impl<T: DupSort> Cursor<RW, T> {
 /// A key-value pair coming from an iterator.
 ///
 /// The `Result` represents that the operation might fail, while the `Option` represents whether or
-/// not there is another entry.
+/// not there is an entry.
 pub type IterPairResult<T> = Option<Result<KeyValue<T>, DatabaseError>>;
 
-/// Provides an iterator to `Cursor` when handling `Table`.
-///
-/// Reason why we have two lifetimes is to distinguish between `'cursor` lifetime
-/// and inherited `'tx` lifetime. If there is only one, rust would short circle
-/// the Cursor lifetime and it wouldn't be possible to use Walker.
+/// Provides an iterator to a `Cursor` when handling `Table`.
+#[derive(Debug)]
 pub struct Walker<'c, K: TransactionKind, T: Table> {
     /// Cursor to be used to walk through the table.
     cursor: &'c mut Cursor<K, T>,
-    /// `(key, value)` where to start the walk.
+    /// Initial position of the dup walker. The value (key/value pair)  where to start the walk.
     start: IterPairResult<T>,
-}
-
-impl<K, T> std::fmt::Debug for Walker<'_, K, T>
-where
-    K: TransactionKind,
-    T: Table + std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Walker").field("cursor", &self.cursor).field("start", &self.start).finish()
-    }
 }
 
 impl<'c, K, T> Walker<'c, K, T>
@@ -281,16 +282,13 @@ where
     T: Table,
 {
     /// Create a new [`Walker`] from a [`Cursor`] and a [`IterPairResult`].
-    pub fn new(cursor: &'c mut Cursor<K, T>, start: IterPairResult<T>) -> Self {
+    pub(super) fn new(cursor: &'c mut Cursor<K, T>, start: IterPairResult<T>) -> Self {
         Self { cursor, start }
     }
 }
 
-impl<'c, T> Walker<'c, RW, T>
-where
-    T: Table,
-{
-    /// Delete current item that walker points to.
+impl<T: Table> Walker<'_, RW, T> {
+    /// Delete the `key/value` pair item at the current position of the walker.
     pub fn delete_current(&mut self) -> Result<(), DatabaseError> {
         self.cursor.delete_current()
     }
@@ -303,26 +301,36 @@ impl<K: TransactionKind, T: Table> std::iter::Iterator for Walker<'_, K, T> {
     }
 }
 
-/// A cursor iterator for dupsort table.
+/// A cursor iterator for `DUPSORT` table.
+///
+/// Similar to [`Walker`], but for `DUPSORT` table.
+#[derive(Debug)]
 pub struct DupWalker<'c, K: TransactionKind, T: DupSort> {
     /// Cursor to be used to walk through the table.
-    pub cursor: &'c mut Cursor<K, T>,
-    /// Value where to start the walk.
-    pub start: IterPairResult<T>,
+    cursor: &'c mut Cursor<K, T>,
+    /// Initial position of the dup walker. The value (key/value pair) where to start the walk.
+    start: IterPairResult<T>,
 }
 
-impl<'c, T: DupSort> DupWalker<'c, RW, T> {
-    /// Delete current item that walker points to.
+impl<'c, K, T> DupWalker<'c, K, T>
+where
+    K: TransactionKind,
+    T: DupSort,
+{
+    /// Creates a new [`DupWalker`] from a [`Cursor`] and a [`IterPairResult`].
+    pub(super) fn new(cursor: &'c mut Cursor<K, T>, start: IterPairResult<T>) -> Self {
+        Self { cursor, start }
+    }
+}
+
+impl<T: DupSort> DupWalker<'_, RW, T> {
+    /// Delete the item at the current position of the walker.
     pub fn delete_current(&mut self) -> Result<(), DatabaseError> {
         self.cursor.delete_current()
     }
 }
 
-impl<'c, K, T> std::iter::Iterator for DupWalker<'c, K, T>
-where
-    K: TransactionKind,
-    T: DupSort,
-{
+impl<K: TransactionKind, T: DupSort> std::iter::Iterator for DupWalker<'_, K, T> {
     type Item = Result<KeyValue<T>, DatabaseError>;
     fn next(&mut self) -> Option<Self::Item> {
         if let value @ Some(_) = self.start.take() {
@@ -330,18 +338,5 @@ where
         } else {
             self.cursor.next_dup().transpose()
         }
-    }
-}
-
-impl<K, T> fmt::Debug for DupWalker<'_, K, T>
-where
-    K: TransactionKind,
-    T: DupSort,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DupWalker")
-            .field("cursor", &self.cursor)
-            .field("start", &self.start)
-            .finish()
     }
 }

@@ -14,6 +14,8 @@ use crate::utils::decode_one;
 
 /// Alias for read-only transaction.
 pub type TxRO = Tx<libmdbx::RO>;
+/// Alias for read-write transaction.
+pub type TxRW = Tx<libmdbx::RW>;
 
 /// Database transaction.
 ///
@@ -21,9 +23,9 @@ pub type TxRO = Tx<libmdbx::RO>;
 #[derive(Debug)]
 pub struct Tx<K: TransactionKind> {
     /// Libmdbx-sys transaction.
-    pub inner: libmdbx::Transaction<K>,
+    inner: libmdbx::Transaction<K>,
     /// Database table handle cache.
-    pub(crate) db_handles: RwLock<[Option<DBI>; NUM_TABLES]>,
+    db_handles: RwLock<[Option<DBI>; NUM_TABLES]>,
 }
 
 impl<K: TransactionKind> Tx<K> {
@@ -32,14 +34,12 @@ impl<K: TransactionKind> Tx<K> {
         Self { inner, db_handles: Default::default() }
     }
 
-    /// Creates a cursor to iterate over a table values.
+    /// Creates a cursor to iterate over a table items.
     pub fn cursor<T: Table>(&self) -> Result<Cursor<K, T>, DatabaseError> {
-        let inner = self
-            .inner
+        self.inner
             .cursor_with_dbi(self.get_dbi::<T>()?)
-            .map_err(DatabaseError::CreateCursor)?;
-
-        Ok(Cursor::new(inner))
+            .map(Cursor::new)
+            .map_err(DatabaseError::CreateCursor)
     }
 
     /// Gets a table database handle if it exists, otherwise creates it.
@@ -68,11 +68,10 @@ impl<K: TransactionKind> Tx<K> {
 
     /// Returns number of entries in the table using cheap DB stats invocation.
     pub fn entries<T: Table>(&self) -> Result<usize, DatabaseError> {
-        Ok(self
-            .inner
+        self.inner
             .db_stat_with_dbi(self.get_dbi::<T>()?)
-            .map_err(DatabaseError::Stat)?
-            .entries())
+            .map(|stat| stat.entries())
+            .map_err(DatabaseError::Stat)
     }
 
     /// Commits the transaction.
@@ -105,6 +104,7 @@ impl Tx<RW> {
         self.inner.del(self.get_dbi::<T>()?, key.encode(), value).map_err(DatabaseError::Delete)
     }
 
+    /// Clears all entries in the given database. This will emtpy the database.
     pub fn clear<T: Table>(&self) -> Result<(), DatabaseError> {
         self.inner.clear_db(self.get_dbi::<T>()?).map_err(DatabaseError::Clear)
     }
@@ -112,14 +112,5 @@ impl Tx<RW> {
     /// Aborts the transaction.
     pub fn abort(self) {
         drop(self.inner)
-    }
-}
-
-impl<K> From<libmdbx::Transaction<K>> for Tx<K>
-where
-    K: TransactionKind,
-{
-    fn from(inner: libmdbx::Transaction<K>) -> Self {
-        Tx::new(inner)
     }
 }
