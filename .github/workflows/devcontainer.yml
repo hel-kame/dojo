@@ -58,7 +58,6 @@ jobs:
             VARIANT=bullseye
           platforms: linux/amd64,linux/arm64
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}-dev:latest
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}-dev:cache
 
   propose-update-pr:
     needs: build-and-push
@@ -83,7 +82,7 @@ jobs:
           git add .devcontainer/devcontainer.json
           git commit -m "Update devcontainer image hash: ${{ needs.build-and-push.outputs.tag_name }}"
           git checkout -b devcontainer-${{ needs.build-and-push.outputs.tag_name }}
-          git push --set-upstream origin devcontainer--${{ needs.build-and-push.outputs.tag_name }}
+          git push --set-upstream origin devcontainer-${{ needs.build-and-push.outputs.tag_name }}
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3

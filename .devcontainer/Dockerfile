@@ -32,5 +32,5 @@ RUN apt-get update && bash /tmp/library-scripts/node-debian.sh "${NVM_DIR}"
 USER vscode
 RUN curl -L https://install.dojoengine.org | bash
 RUN curl --proto '=https' --tlsv1.2 -sSf https://docs.swmansion.com/scarb/install.sh | bash
-
-ENV PATH=${PATH}:/workspaces/dojo/target/release
+ENV PATH=${PATH}:/workspaces/dojo/target/release:/home/vscode/.dojo/bin
+RUN /home/vscode/.dojo/bin/dojoup
