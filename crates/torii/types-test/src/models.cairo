@@ -41,14 +41,22 @@ struct NestedMore {
     depth: Depth,
     type_number: u8,
     type_string: felt252,
-    type_nested_more_more: NestedMoreMore,
+    type_nested_most: NestedMost,
 }
 
 #[derive(Copy, Drop, Serde, Introspect)]
-struct NestedMoreMore {
+struct NestedMost {
     depth: Depth,
     type_number: u8,
     type_string: felt252,
+}
+
+#[derive(Model, Copy, Drop, Serde)]
+struct SameLevelNested {
+    #[key]
+    record_id: u32,
+    nested_one: NestedMost,
+    nested_two: NestedMost,
 }
 
 #[derive(Model, Copy, Drop, Serde)]

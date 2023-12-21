@@ -8,7 +8,7 @@ trait IRecords<TContractState> {
 #[dojo::contract]
 mod records {
     use starknet::{ContractAddress, get_caller_address};
-    use types_test::models::{Record, RecordSibling, Subrecord, Nested, NestedMore, NestedMoreMore, Depth};
+    use types_test::models::{Record, RecordSibling, Subrecord, Nested, NestedMore, NestedMost, SameLevelNested, Depth};
     use types_test::{seed, random};
     use super::IRecords;
 
@@ -40,7 +40,7 @@ mod records {
                 }
 
                 let type_felt: felt252 = record_idx.into();
-                let random_u8 = random(pedersen::pedersen(seed(), record_idx.into()), 0, 100)
+                let random_u8: u8 = random(pedersen::pedersen(seed(), record_idx.into()), 0, 100)
                     .try_into()
                     .unwrap();
                 let random_u128 = random(
@@ -80,7 +80,7 @@ mod records {
                                     depth: Depth::Two,
                                     type_number: record_idx.into(),
                                     type_string: type_felt,
-                                    type_nested_more_more: NestedMoreMore {
+                                    type_nested_most: NestedMost {
                                         depth: Depth::Three,
                                         type_number: record_idx.into(),
                                         type_string: type_felt,
@@ -95,6 +95,19 @@ mod records {
                         },
                         Subrecord {
                             record_id, subrecord_id, type_u8: record_idx.into(), random_u8,
+                        },
+                        SameLevelNested {
+                            record_id,
+                            nested_one: NestedMost {
+                                depth: Depth::One,
+                                type_number: 1,
+                                type_string: 1,
+                            },
+                            nested_two: NestedMost {
+                                depth: Depth::One,
+                                type_number: 2,
+                                type_string: 2,
+                            }
                         }
                     )
                 );

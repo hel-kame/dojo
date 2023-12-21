@@ -114,7 +114,7 @@ pub fn parse_sql_model_members(model: &str, model_members_all: &[SqlModelMember]
                     key: child.key,
                     name: child.name.to_owned(),
                     ty: parse_sql_model_members_impl(
-                        &format!("{}${}", child.id, child.r#type),
+                        &format!("{}${}__{}", child.id, child.r#type, child.name),
                         model_members_all,
                     ),
                 },
@@ -142,8 +142,13 @@ pub fn parse_sql_model_members(model: &str, model_members_all: &[SqlModelMember]
             .collect::<Vec<Member>>();
 
         // refer to the sql table for `model_members`
-        let model_name = path.split('$').last().unwrap_or(path);
-
+        let model_name = path
+            .split('$')
+            .last()
+            .unwrap_or(path)
+            .split("__")
+            .next()
+            .expect("incorrect nested table name");
         Ty::Struct(Struct { name: model_name.to_owned(), children })
     }
 
@@ -161,7 +166,7 @@ pub fn build_sql_query(model_schemas: &Vec<Ty>) -> Result<String, Error> {
         for child in &schema.children {
             match &child.ty {
                 Ty::Struct(s) => {
-                    let table_name = format!("{}${}", path, s.name);
+                    let table_name = format!("{}${}__{}", path, child.ty.name(), child.name);
                     parse_struct(&table_name, s, selections, tables);
 
                     tables.push(table_name);
@@ -276,7 +281,8 @@ pub fn map_row_to_ty(path: &str, struct_ty: &mut Struct, row: &SqliteRow) -> Res
                 enum_ty.set_option(&value)?;
             }
             Ty::Struct(struct_ty) => {
-                let path = [path, &struct_ty.name].join("$");
+                let nested_path = format!("{}__{}", struct_ty.name, member.name);
+                let path = [path, &nested_path].join("$");
                 map_row_to_ty(&path, struct_ty, row)?;
             }
             ty => {
