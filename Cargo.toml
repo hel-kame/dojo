@@ -139,3 +139,4 @@ blockifier = { git = "https://github.com/dojoengine/blockifier", rev = "e6e9c90"
 [patch.crates-io]
 cairo-felt = { git = "https://github.com/dojoengine/cairo-rs.git", rev = "262b7eb4b11ab165a2a936a5f914e78aa732d4a2" }
 cairo-vm = { git = "https://github.com/dojoengine/cairo-rs.git", rev = "262b7eb4b11ab165a2a936a5f914e78aa732d4a2" }
+starknet = { git = "https://github.com/kariy/starknet-rs", branch = "refactor-serde" }
