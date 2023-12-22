@@ -124,7 +124,6 @@ pub struct Class {
     pub name: SmolStr,
     #[serde_as(as = "UfeHex")]
     pub class_hash: FieldElement,
-    pub abi: Option<abi::Contract>,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
